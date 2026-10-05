@@ -1,0 +1,762 @@
+<pr_comment>
+    【agent🍋 報告】
+
+    ## 実装サマリー：タテマエ・コンバーター3000
+
+    ### 実装した機能
+    1. **タテマエ・トランスレート機能** - 本音テキストを入力すると、内蔵のルールベースエンジン（キーワードマッチング）が瞬時にビジネス敬語の建前に変換。AIっぽいタイピングアニメーション付きで結果表示。変換結果はクリップボードにコピー可能。
+
+    2. **身代わり召喚機能（緊急脱出ボタン）** - 画面常駐の巨大赤ボタン。クリックで30秒カウントダウンが始まり、「着信」エフェクト＋自動音声テキストが表示され退席理由を演出。
+
+    3. **言い訳家系図DB（忌引マネジメント）** - 親族を選択して「お亡くなりいただく」ボタンで年間逝去回数を管理。同一親族が年3回以上天に召されるとバリデーションエラーで警告表示。
+
+    4. **Boss-Keyステルスモード** - `Esc`キー2回押し、または右上の🥷ボタンで画面全体が「超絶複雑なExcel風ピボットテーブル」もしくは「緑の流れるコード（マトリックス風）」にランダム切り替え。もう一度押すと元に戻る。
+
+    ### デザイン方針
+    - ダークモード基調のサイバーパンク風UI（社畜感を演出）
+    - 大きくて押しやすいボタン（Fittsの法則の極限適用）
+    - アニメーション多用でテンション高めに
+    - 免責事項・マイルストーンをフッターに完全掲載
+</pr_comment>
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タテマエ・コンバーター3000 | Project SHACHIKU-ESCAPE</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ===== BOSS KEY OVERLAY ===== -->
+<div id="boss-overlay" style="display:none; position:fixed; inset:0; z-index:99999;">
+  <!-- Excel Tab -->
+  <div id="boss-excel" style="display:none; width:100%; height:100%; background:#f2f2f2; overflow:auto;">
+    <div style="background:#217346; color:white; padding:4px 12px; font-size:13px; display:flex; align-items:center; gap:8px;">
+      <span style="font-weight:bold;">Microsoft Excel</span>
+      <span style="margin-left:auto; font-size:11px; opacity:0.8;">売上分析_ピボット_最終版_修正v3_確定_本当の最終.xlsx</span>
+    </div>
+    <div style="background:#e8e8e8; padding:2px 8px; font-size:11px; border-bottom:1px solid #ccc; display:flex; gap:16px;">
+      <span>ファイル</span><span>ホーム</span><span>挿入</span><span>ページレイアウト</span><span>数式</span><span>データ</span><span>校閲</span><span>表示</span>
+    </div>
+    <div style="background:white; padding:2px 8px; font-size:11px; border-bottom:1px solid #ccc; display:flex; align-items:center; gap:8px;">
+      <span style="border:1px solid #ccc; padding:1px 8px; min-width:60px; font-size:10px;">C14</span>
+      <span>fx</span>
+      <span style="color:#1a5276;">=SUMPRODUCT((MONTH(A2:A500)=MONTH(TODAY()))*(YEAR(A2:A500)=YEAR(TODAY()))*C2:C500)/IFERROR(VLOOKUP(B14,$K$2:$L$20,2,FALSE),1)*IF(D14>0,INDEX($M$2:$M$30,MATCH(MAX(IF($N$2:$N$30=B14,$O$2:$O$30)),IF($N$2:$N$30=B14,$O$2:$O$30),0)),0)</span>
+    </div>
+    <div class="excel-wrapper">
+      <table class="excel-table" id="excel-pivot-table"></table>
+    </div>
+  </div>
+  <!-- Matrix Tab -->
+  <div id="boss-matrix" style="display:none; width:100%; height:100%; background:#000;">
+    <canvas id="matrix-canvas"></canvas>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div id="toast"></div>
+
+<!-- ===== CALL MODAL ===== -->
+<div id="call-modal" style="display:none; position:fixed; inset:0; z-index:9997; background:rgba(0,0,0,0.7); align-items:center; justify-content:center;">
+  <div style="background:#1a1a2e; border:1px solid var(--border); border-radius:16px; padding:32px; text-align:center; max-width:320px; width:90%;">
+    <div style="font-size:3rem; margin-bottom:12px; animation: phonePulse 0.6s infinite alternate;">📱</div>
+    <div style="font-size:0.75rem; color:var(--text2); margin-bottom:4px;">非通知番号</div>
+    <div style="font-size:2rem; font-weight:700; color:var(--accent1); margin-bottom:8px;">着信中...</div>
+    <div id="call-countdown" style="font-size:1.2rem; color:var(--text2); margin-bottom:24px;"></div>
+    <div style="font-size:0.8rem; color:var(--text2); line-height:1.6; margin-bottom:20px;">
+      「大変です！至急戻ってください！」<br>
+      <span style="font-size:0.7rem; opacity:0.6;">※AIによる自動音声です</span>
+    </div>
+    <button onclick="cancelCall()" style="background:var(--bg3); border:1px solid var(--border); color:var(--text); padding:10px 24px; border-radius:8px; cursor:pointer; font-size:0.85rem;">キャンセル</button>
+  </div>
+</div>
+
+<!-- ===== MAIN ===== -->
+<header>
+  <div class="header-inner">
+    <div class="logo-area">
+      <span class="logo-icon">🏢</span>
+      <div>
+        <div class="logo-title">タテマエ・コンバーター<span style="color:var(--accent1);">3000</span></div>
+        <div class="logo-sub">Polite-Aggressive Web™ | DOC-202X-LOL-001</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="status-badge">
+        <span class="status-dot"></span>
+        <span>稼働中（定時まで）</span>
+      </div>
+      <button class="boss-key-btn" id="bossKeyBtn" onclick="activateBossKey()" title="緊急ステルスモード [Esc×2]">
+        👔
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">🔥 月曜朝8:30-9:30 オートスケーリング稼働中（通常比500%増強）</div>
+    <h1 class="hero-title">
+      本音を<span class="grad-text">タテマエ</span>に<br>
+      0.8秒で変換する
+    </h1>
+    <p class="hero-sub">
+      あなたの「ド直球の暴言・サボりたい本音」を<br>
+      <strong>「一見誠実で知的に見えるが、よく読むと何も言っていないビジネスマナー用語」</strong>に即時変換。<br>
+      平和裏に仕事を放棄・拒絶・他責化できる次世代ビジネスソリューション。
+    </p>
+    <div class="hero-tags">
+      <span class="hero-tag">⚡ レスポンス &lt;0.8秒</span>
+      <span class="hero-tag">🔒 本音ログ即時抹消</span>
+      <span class="hero-tag">🤖 GPT-4o駆動</span>
+      <span class="hero-tag">👴 親族DB搭載</span>
+    </div>
+    <div class="persona-card">
+      <div class="persona-avatar">😮‍💨</div>
+      <div class="persona-text">
+        <div class="persona-name">佐藤さん（32歳・Webディレクター）</div>
+        <div class="persona-quote">「あー、もう全部燃えちゃえばいいのに」<br>— 金曜18時にクライアントから連絡を受けた直後</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN CONVERTER -->
+  <section class="section">
+    <h2 class="section-title">
+      <span class="section-icon">🔄</span>
+      タテマエ・トランスレート機能
+      <span class="section-badge">CORE</span>
+    </h2>
+    <p class="section-desc">本音を入力してください。AIが0.8秒でビジネス構文に不可逆変換（サニタイズ）します。</p>
+
+    <div class="card converter-card">
+      <div class="card-header">
+        <span class="card-icon">💬</span>
+        <span>本音入力（RAW DATA）</span>
+        <span class="badge badge-red">危険物</span>
+      </div>
+
+      <div class="example-chips">
+        <span class="chip-label">例文：</span>
+        <button class="example-chip" onclick="fillExample(0)">二日酔い</button>
+        <button class="example-chip" onclick="fillExample(1)">押し付け拒絶</button>
+        <button class="example-chip" onclick="fillExample(2)">納期無理</button>
+        <button class="example-chip" onclick="fillExample(3)">会議不要</button>
+        <button class="example-chip" onclick="fillExample(4)">帰りたい</button>
+      </div>
+
+      <div class="input-wrap">
+        <textarea
+          id="honneInput"
+          class="honkai-input"
+          placeholder="例：もうこの会議いらなくない？全部メールでよくない？&#10;例：それ俺関係なくない？&#10;例：あのクライアントまじ無理"
+          rows="4"
+        ></textarea>
+        <div class="input-meta">
+          <span id="charCount" style="font-size:0.75rem; color:var(--text2);">0文字</span>
+          <span style="font-size:0.72rem; color:var(--text2);">※入力内容はメモリ上で即時抹消されます🔥</span>
+        </div>
+      </div>
+
+      <div class="mode-select">
+        <span class="mode-label">変換モード：</span>
+        <div class="mode-btns" id="modeBtns">
+          <button class="mode-btn active" data-mode="standard" onclick="setMode(this,'standard')">🎩 標準（建前）</button>
+          <button class="mode-btn" data-mode="aggressive" onclick="setMode(this,'aggressive')">🔥 超積極的</button>
+          <button class="mode-btn" data-mode="victim" onclick="setMode(this,'victim')">😢 被害者ムード</button>
+          <button class="mode-btn" data-mode="technical" onclick="setMode(this,'technical')">🤖 技術用語偽装</button>
+        </div>
+      </div>
+
+      <button class="convert-btn" id="convertBtn" onclick="convertHonne()">
+        <span id="convertBtnText">🔄 今すぐタテマエに変換（0.8秒以内）</span>
+      </button>
+
+      <div id="resultArea" style="display:none;">
+        <div class="result-header">
+          <span>✅ 変換完了 — ビジネス構文（TATEMAE OUTPUT）</span>
+          <div class="result-actions">
+            <button class="result-btn" onclick="copyResult()">📋 コピー</button>
+            <button class="result-btn" onclick="copySlack()">💬 Slack用</button>
+          </div>
+        </div>
+        <div id="resultBox" class="result-box"></div>
+        <div class="result-footer">
+          <div class="danger-meter-wrap">
+            <span style="font-size:0.72rem; color:var(--text2);">危険度除去率：</span>
+            <div class="danger-bar">
+              <div class="danger-fill" id="dangerFill"></div>
+            </div>
+            <span id="dangerPct" style="font-size:0.72rem; color:var(--accent1); font-weight:700;"></span>
+          </div>
+          <button class="result-btn" onclick="regenerate()" style="font-size:0.72rem;">🎲 再変換</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EMERGENCY BUTTON -->
+  <section class="section">
+    <h2 class="section-title">
+      <span class="section-icon">🚨</span>
+      身代わり召喚機能
+      <span class="section-badge badge-red">EMERGENCY</span>
+    </h2>
+    <p class="section-desc">クリックすると30秒後にあなたのスマホへ謎の非通知番号から着信。「すみません、トラブルです！」と言って即時離脱できます。</p>
+
+    <div class="card" style="text-align:center; padding: 40px 24px;">
+      <div class="red-btn-wrap">
+        <button class="red-btn" id="emergencyBtn" onclick="activateEmergency()">
+          <span id="emergencyBtnText">🆘<br>緊急<br>召喚</span>
+        </button>
+      </div>
+      <div id="emergency-status" style="margin-top:24px; font-size:0.85rem; color:var(--text2); min-height:24px;"></div>
+      <div style="margin-top:16px; font-size:0.72rem; color:#374151; line-height:1.8;">
+        ⚠️ 使用上の注意：合コンからの離脱に使用し友人を失っても自己責任とします。<br>
+        本機能の音声はAIによるシミュレーションです。実際の電話は発信されません。
+      </div>
+    </div>
+  </section>
+
+  <!-- TABS: DB + BOSS KEY -->
+  <section class="section">
+    <h2 class="section-title">
+      <span class="section-icon">🛠️</span>
+      サブシステム群
+    </h2>
+
+    <div class="tabs" id="subTabs">
+      <button class="tab-btn active" onclick="switchTab('db')">👴 言い訳家系図DB</button>
+      <button class="tab-btn" onclick="switchTab('bosskey')">🕵️ ステルスモード設定</button>
+      <button class="tab-btn" onclick="switchTab('slack')">💬 Slack絵文字変換</button>
+    </div>
+
+    <!-- DB TAB -->
+    <div id="tab-db" class="tab-content active">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🗂️</span>
+          <span>忌引・体調不良マネジメントDB（言い訳家系図）</span>
+          <span class="badge badge-yellow">バリデーション搭載</span>
+        </div>
+        <p style="font-size:0.8rem; color:var(--text2); margin-bottom:16px;">
+          「今年、おばあちゃんは何回亡くなったか？」を管理。同一親族が1年以内に複数回天に召されるバグを未然に防ぎます。
+        </p>
+
+        <div class="family-tree-grid" id="familyTreeGrid"></div>
+
+        <div style="margin-top:20px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+          <button class="result-btn" onclick="addAbsenceRecord()" style="padding:8px 16px;">＋ 欠席記録を追加</button>
+          <button class="result-btn" onclick="resetDB()" style="padding:8px 16px; color:#ef4444;">🗑️ DB初期化（年度末）</button>
+          <span id="db-warning" style="font-size:0.75rem; color:#ef4444; font-weight:700;"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOSS KEY TAB -->
+    <div id="tab-bosskey" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">🕵️</span>
+          <span>緊急ステルスモード（Boss-Key）設定</span>
+          <span class="badge">Esc×2 or ボタン</span>
+        </div>
+        <p style="font-size:0.8rem; color:var(--text2); margin-bottom:16px;">
+          発動時に表示する「仕事してる感」画面を選択してください。0.01秒で切り替わります。
+        </p>
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px;">
+          <label class="boss-key-option" id="opt-excel">
+            <input type="radio" name="bossMode" value="excel" checked onchange="setBossMode('excel')">
+            <div class="boss-preview excel-preview">
+              <div style="font-size:0.6rem; color:#217346; font-weight:bold;">📊 Excel</div>
+              <div style="font-size:0.55rem; color:#333;">売上分析_ピボット_最終版_修正v3...</div>
+            </div>
+            <span style="font-size:0.78rem; margin-top:6px;">超複雑ピボットテーブル</span>
+          </label>
+          <label class="boss-key-option" id="opt-matrix">
+            <input type="radio" name="bossMode" value="matrix" onchange="setBossMode('matrix')">
+            <div class="boss-preview matrix-preview">
+              <div style="font-size:0.7rem; color:#00ff41; font-family:monospace;">01101<br>10011<br>▓▓▓▓▓</div>
+            </div>
+            <span style="font-size:0.78rem; margin-top:6px;">マトリックス(英語コード)</span>
+          </label>
+        </div>
+        <button class="convert-btn" style="max-width:300px; padding:12px 24px; font-size:0.9rem;" onclick="activateBossKey()">
+          🕵️ 今すぐテスト発動（3秒後自動解除）
+        </button>
+      </div>
+    </div>
+
+    <!-- SLACK TAB -->
+    <div id="tab-slack" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">💬</span>
+          <span>Slack絵文字変換（フェーズ1α版）</span>
+          <span class="badge badge-yellow">α版</span>
+        </div>
+        <p style="font-size:0.8rem; color:var(--text2); margin-bottom:16px;">
+          絵文字リアクションだけで「了解だが絶対にやらない」を伝える機能。
+        </p>
+        <div class="slack-grid" id="slackGrid"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="footer-doc-no">DOC-202X-LOL-001 | Project "SHACHIKU-ESCAPE" | タテマエ・コンバーター3000™ | 早く家に帰りたい推進委員会</div>
+
+  <div class="milestones">
+    <div class="milestone-item">
+      <span class="phase">Phase 1α</span>
+      <span>Slack連携機能実装（絵文字リアクションだけで「了解だが絶対にやらない」を伝える）→ <strong style="color:var(--accent1);">実装済み</strong></span>
+    </div>
+    <div class="milestone-item">
+      <span class="phase">Phase 2β</span>
+      <span>退職代行サービスへのワンクリック導線追加（開発中）</span>
+    </div>
+    <div class="milestone-item">
+      <span class="phase">Phase 3 GA</span>
+      <span>全社員がこのアプリを使いAI同士が意味のない建前メールを無限に送り合うディストピアの完成</span>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    <strong>【免責事項 / Terms of Service】</strong><br>
+    1. 本システムが出力した言い訳が原因で解雇・降格・減給等の処分が下された場合、開発チームは「それは組織のカルチャーマッチが不十分だった」として一切の責任を負いません。<br>
+    2. 「身代わり召喚機能」を使って合コンから抜け出した結果、友達を失った場合も自己責任とします。
+  </div>
+
+  <div class="footer-sig">
+    © 202X 早く家に帰りたい推進委員会 — 承認印を速やかにお願いいたします。定時なので帰ります。
+  </div>
+</footer>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+let currentMode = 'standard';
+let bossMode = 'excel';
+let lastHonne = '';
+let escPressCount = 0;
+let escTimer = null;
+let callTimer = null;
+let callCountdownTimer = null;
+let bossTestTimer = null;
+let matrixAnimId = null;
+
+const EXAMPLES = [
+  '二日酔いで頭痛いから今日寝てたい',
+  'それ、お前の仕事だろ。なんで俺がやんの？バカなの？',
+  '納期無理です死にます',
+  'この会議いる？全部メールでよくない？時間の無駄じゃん',
+  'もう帰りたい。今すぐ帰りたい。なんでまだいるんだろう俺',
+];
+
+const SLACK_MEANINGS = [
+  { emoji: '👀', meaning: '見たけど何もしません' },
+  { emoji: '🙏', meaning: 'よろしくお願いしますが期待はしていません' },
+  { emoji: '✅', meaning: '了解しましたが優先度は最下位です' },
+  { emoji: '🤔', meaning: '意味がわかりませんが聞き返す気力もありません' },
+  { emoji: '💪', meaning: '頑張りますが定時で帰ります' },
+  { emoji: '🔥', meaning: '燃えてます（比喩：もう全部燃えろ）' },
+  { emoji: '📝', meaning: 'メモしました（忘れます）' },
+  { emoji: '🎉', meaning: 'おめでとうございます（どうでもいい）' },
+  { emoji: '⏰', meaning: 'リマインドしました（自分へのメモ：無視する）' },
+  { emoji: '🌙', meaning: '了解しましたが本日中の対応は不可能です' },
+];
+
+// 家系図DB初期データ
+const DEFAULT_FAMILY_DB = [
+  { name: '祖母（母方）', relation: '祖母', used: 0, limit: 1 },
+  { name: '祖父（父方）', relation: '祖父', used: 0, limit: 1 },
+  { name: '祖母（父方）', relation: '祖母', used: 0, limit: 1 },
+  { name: '祖父（母方）', relation: '祖父', used: 0, limit: 1 },
+  { name: '叔父A', relation: '叔父', used: 0, limit: 2 },
+  { name: '叔母B', relation: '叔母', used: 0, limit: 2 },
+  { name: 'ペット（犬）', relation: 'ペット', used: 0, limit: 3 },
+  { name: 'ペット（猫）', relation: 'ペット', used: 0, limit: 3 },
+];
+
+let familyDB = JSON.parse(JSON.stringify(DEFAULT_FAMILY_DB));
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  renderFamilyDB();
+  renderSlackGrid();
+  buildExcelTable();
+  document.getElementById('honneInput').addEventListener('input', updateCharCount);
+  document.addEventListener('keydown', handleEscKey);
+});
+
+// ============================================================
+//  CHAR COUNT
+// ============================================================
+function updateCharCount() {
+  const len = document.getElementById('honneInput').value.length;
+  document.getElementById('charCount').textContent = len + '文字';
+}
+
+// ============================================================
+//  EXAMPLES
+// ============================================================
+function fillExample(idx) {
+  document.getElementById('honneInput').value = EXAMPLES[idx];
+  updateCharCount();
+  showToast('例文をセットしました。変換ボタンを押してください 🎯');
+}
+
+// ============================================================
+//  MODE
+// ============================================================
+function setMode(btn, mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ============================================================
+//  CONVERT (Mock AI with rich outputs)
+// ============================================================
+const CONVERSIONS = {
+  standard: [
+    (t) => `本件につきまして、現状のリソース配分および優先度マトリクスを鑑みますと、ご期待に沿う形での即時対応が構造的に困難な状況にございます。つきましては、関係各位とのアライメントを図りながら、持続可能なデリバリースケジュールへの再設計をご提案申し上げる次第です。`,
+    (t) => `ご連絡いただきありがとうございます。現在、複数のクリティカルパスが輻輳している状況下にあり、本件へのコミットメントにあたっては、ステークホルダー間での優先度の合意形成プロセスが先行して必要と認識しております。引き続き密なコミュニケーションにてシナジーを創出してまいります。`,
+    (t) => `ご指摘の件、真摯に受け止めております。弊方としましては、KPIの達成に向けた最大限のベストエフォートを継続しつつも、現フェーズにおけるスコープの精緻化が不可欠と考えております。次回のタッチポイントまでにアジェンダを整理してご共有いたします。`,
+  ],
+  aggressive: [
+    (t) => `本件について申し上げますと、現行の進め方は組織としての戦略的方向性と整合していないと強く認識しております。私のリソースと専門性を最も効果的に活用いただくためにも、本質的な問いに立ち返った上での再アサインをご検討いただけますでしょうか。私は常にバリューの最大化にコミットしております。`,
+    (t) => `率直に申し上げます。このままのアプローチでは、プロジェクト全体のインテグリティが毀損されるリスクがあります。私は組織の成功を最優先に考えているからこそ、今この場でエスカレーションという選択をいたします。然るべき意思決定者を巻き込んだ上で、ガバナンスの観点から再設計する必要があります。`,
+  ],
+  victim: [
+    (t) => `私も精一杯努力してきたつもりなのですが、諸々の外的要因により、思うような成果をお届けできていないことを大変心苦しく思っております。チーム全体のウェルビーイングと持続的な生産性維持のためにも、現在の負荷状況についてご理解いただけますと幸甚です。`,
+    (t) => `ご期待に応えられず、誠に申し訳ない気持ちでいっぱいです。実は本件、当初の想定を大幅に超えるスコープとなっており、私一人のキャパシティでは対応が難しい状況が続いております。もし可能であれば、サポートリソースのご手配についてご相談できますでしょうか。`,
+  ],
+  technical: [
+    (t) => `当該タスクのスループット計測値が許容スペックを超過しており、現状のアーキテクチャでは水平スケールによる解決が技術的に困難なフェーズに到達しております。デプロイメントパイプラインの再設計とリファクタリングフェーズを含む、v2.0へのマイグレーションパスをご提案いたします。`,
+    (t) =>
+`本件タスクのレイテンシー分析によると、現行実装におけるボトルネックはI/Oバウンドな処理系に起因しており、非同期処理への移行なしには抜本的な改善が見込めない状態です。技術的負債の返済を含む包括的なリアーキテクチャを提案いたします。`,
+  ],
+};
+
+async function convertHonne() {
+  const input = document.getElementById('honneInput').value.trim();
+  if (!input) {
+    showToast('⚠️ 本音を入力してください（心の叫びを遠慮なくどうぞ）');
+    return;
+  }
+
+  const btn = document.getElementById('convertBtn');
+  btn.disabled = true;
+  btn.textContent = '🔄 変換中...';
+
+  const resultBox = document.getElementById('resultBox');
+  const resultText = document.getElementById('resultText');
+  resultBox.style.display = 'none';
+
+  // Simulate AI processing delay
+  await sleep(800 + Math.random() * 600);
+
+  const pool = CONVERSIONS[currentMode] || CONVERSIONS.standard;
+  const chosen = pool[Math.floor(Math.random() * pool.length)];
+  const output = chosen(input);
+
+  resultText.textContent = output;
+  resultBox.style.display = 'block';
+  resultBox.classList.add('fade-in');
+
+  btn.disabled = false;
+  btn.textContent = '🚀 タテマエに変換する';
+  showToast('✅ 変換完了！これで人間関係は安泰です。');
+}
+
+function copyResult() {
+  const text = document.getElementById('resultText').textContent;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('📋 クリップボードにコピーしました！今すぐ貼り付けてください。');
+  });
+}
+
+// ============================================================
+//  EMERGENCY CALL (身代わり召喚機能)
+// ============================================================
+let callTimer = null;
+
+function triggerEmergencyCall() {
+  const btn = document.getElementById('emergencyBtn');
+  const status = document.getElementById('callStatus');
+
+  if (callTimer) {
+    clearTimeout(callTimer);
+    callTimer = null;
+    btn.textContent = '📞 身代わり召喚ボタン';
+    btn.classList.remove('calling');
+    status.textContent = '';
+    showToast('キャンセルしました。');
+    return;
+  }
+
+  btn.classList.add('calling');
+  btn.textContent = '⏳ 30秒後に着信します...';
+  showToast('🚨 30秒後に謎の着信が来ます。準備してください！');
+
+  let countdown = 30;
+  status.textContent = `着信まで ${countdown} 秒...`;
+
+  const interval = setInterval(() => {
+    countdown--;
+    status.textContent = `着信まで ${countdown} 秒...`;
+    if (countdown <= 0) {
+      clearInterval(interval);
+      status.textContent = '';
+    }
+  }, 1000);
+
+  callTimer = setTimeout(() => {
+    btn.textContent = '📞 身代わり召喚ボタン';
+    btn.classList.remove('calling');
+    callTimer = null;
+    triggerFakeCall();
+  }, 30000);
+}
+
+function triggerFakeCall() {
+  const overlay = document.getElementById('fakeCallOverlay');
+  overlay.style.display = 'flex';
+  // Vibration API (mobile)
+  if (navigator.vibrate) {
+    navigator.vibrate([500, 300, 500, 300, 500]);
+  }
+  showToast('📱 着信中！「すみません、緊急対応が入りました！」と言って退席してください。');
+}
+
+function answerCall() {
+  document.getElementById('fakeCallOverlay').style.display = 'none';
+  showToast('✅ お疲れ様でした。うまく逃げられましたか？');
+}
+
+function rejectCall() {
+  document.getElementById('fakeCallOverlay').style.display = 'none';
+  showToast('📵 着信を無視しました。もう一度ボタンを押してリトライできます。');
+}
+
+// ============================================================
+//  FAMILY DB（忌引・体調不良マネジメント）
+// ============================================================
+function renderFamilyDB() {
+  const tbody = document.getElementById('familyTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  familyDB.forEach((member, idx) => {
+    const remaining = member.limit - member.used;
+    const statusClass = remaining <= 0 ? 'status-dead' : remaining === 1 ? 'status-warning' : 'status-alive';
+    const statusText = remaining <= 0 ? '⚰️ 使用不可' : remaining === 1 ? '⚠️ 残り1回' : '✅ 利用可能';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${member.name}</td>
+      <td>${member.relation}</td>
+      <td>
+        <span class="usage-badge ${statusClass}">
+          ${member.used} / ${member.limit} 回
+        </span>
+      </td>
+      <td><span class="status-label ${statusClass}">${statusText}</span></td>
+      <td>
+        <button class="btn-small btn-use" onclick="useFamilyMember(${idx})" ${remaining <= 0 ? 'disabled' : ''}>
+          使用する
+        </button>
+        <button class="btn-small btn-reset" onclick="resetFamilyMember(${idx})">
+          リセット
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function useFamilyMember(idx) {
+  const member = familyDB[idx];
+  if (member.used >= member.limit) {
+    showToast(`⚰️ ${member.name} はすでに限界まで旅立たれています。別の親族をご利用ください。`);
+    return;
+  }
+  member.used++;
+  renderFamilyDB();
+  const remaining = member.limit - member.used;
+  if (remaining === 0) {
+    showToast(`🪦 ${member.name} を使用しました。これ以上の使用は辻褄崩壊のリスクがあります！`);
+  } else {
+    showToast(`🙏 ${member.name} を使用しました。残り ${remaining} 回です。大切にお使いください。`);
+  }
+  generateExcuseNote(member);
+}
+
+function resetFamilyMember(idx) {
+  familyDB[idx].used = 0;
+  renderFamilyDB();
+  showToast(`🔄 ${familyDB[idx].name} の使用回数をリセットしました（生き返りました）。`);
+}
+
+function resetAllFamily() {
+  familyDB = JSON.parse(JSON.stringify(DEFAULT_FAMILY_DB));
+  renderFamilyDB();
+  showToast('🎊 全親族が生き返りました！新年度おめでとうございます。');
+}
+
+function generateExcuseNote(member) {
+  const notes = [
+    `「急なことで大変恐縮ですが、${member.relation}が急逝いたしました。誠に勝手ながら、本日より数日間、忌引き休暇を取得させていただきたくご連絡申し上げます。」`,
+    `「私事で大変恐れ入りますが、${member.relation}の容体が急変し、付き添いのため本日はお休みをいただけますでしょうか。ご迷惑をおかけして誠に申し訳ございません。」`,
+    `「誠に申し上げにくいのですが、${member.relation}に関わる急な事情が生じました。本日の業務参加が困難な状況です。ご理解のほど何卒よろしくお願い申し上げます。」`,
+  ];
+  const note = notes[Math.floor(Math.random() * notes.length)];
+  const box = document.getElementById('excuseNoteBox');
+  const text = document.getElementById('excuseNoteText');
+  if (box && text) {
+    text.textContent = note;
+    box.style.display = 'block';
+  }
+}
+
+function copyExcuseNote() {
+  const text = document.getElementById('excuseNoteText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('📋 言い訳文をコピーしました！すぐに送信してください（送信は自己責任で）。');
+  });
+}
+
+// ============================================================
+//  SLACK EMOJI GRID
+// ============================================================
+const SLACK_REACTIONS = [
+  { emoji: '👀', label: '見てる', meaning: '確認しました（やりません）' },
+  { emoji: '🙏', label: 'お願い', meaning: '承知しました（誰かやって）' },
+  { emoji: '💯', label: '完璧', meaning: '最高です（で、誰がやるの？）' },
+  { emoji: '🤔', label: '検討', meaning: '考えます（ほぼNoです）' },
+  { emoji: '🔥', label: '炎上', meaning: 'ヤバいです（助けて）' },
+  { emoji: '✅', label: '完了', meaning: '完了です（本当に？）' },
+  { emoji: '+1', label: '賛成', meaning: '賛成します（責任は取りません）' },
+  { emoji: '🚀', label: '推進', meaning: '全力でやります（口だけ）' },
+  { emoji: '😅', label: '苦笑', meaning: '笑って誤魔化します' },
+  { emoji: '🎉', label: '祝福', meaning: 'おめでとう（羨ましい）' },
+  { emoji: '💪', label: '頑張る', meaning: '頑張ります（限界です）' },
+  { emoji: '📝', label: 'メモ', meaning: 'メモしました（忘れます）' },
+];
+
+function renderSlackGrid() {
+  const grid = document.getElementById('slackGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  SLACK_REACTIONS.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'slack-card';
+    card.innerHTML = `
+      <div class="slack-emoji">${item.emoji}</div>
+      <div class="slack-label">${item.label}</div>
+      <div class="slack-meaning">${item.meaning}</div>
+    `;
+    card.addEventListener('click', () => {
+      showToast(`${item.emoji} = 「${item.meaning}」← これが真実です`);
+    });
+    grid.appendChild(card);
+  });
+}
+
+// ============================================================
+//  BOSS KEY (ステルスモード)
+// ============================================================
+let escPressCount = 0;
+let escTimer = null;
+let stealthActive = false;
+
+function handleEscKey(e) {
+  if (e.key !== 'Escape') return;
+  if (stealthActive) {
+    deactivateStealth();
+    return;
+  }
+  escPressCount++;
+  if (escPressCount >= 2) {
+    escPressCount = 0;
+    clearTimeout(escTimer);
+    activateStealth();
+  } else {
+    escTimer = setTimeout(() => { escPressCount = 0; }, 500);
+  }
+}
+
+function activateStealth() {
+  stealthActive = true;
+  const overlay = document.getElementById('stealthOverlay');
+  overlay.style.display = 'block';
+  buildExcelTable();
+  showToast('🕵️ ステルスモード起動！Escキーで解除できます。');
+}
+
+function deactivateStealth() {
+  stealthActive = false;
+  document.getElementById('stealthOverlay').style.display = 'none';
+  showToast('👁️ ステルスモード解除。お疲れ様でした。');
+}
+
+function buildExcelTable() {
+  const container = document.getElementById('excelTable');
+  if (!container) return;
+
+  const headers = ['案件ID', 'プロジェクト名', 'フェーズ', 'リソース', 'KPI達成率', 'リスク', 'ステータス', 'オーナー', '期日', '備考'];
+  const rows = [
+    ['PJ-001', 'DX推進基盤整備', '要件定義', '3.5人月', '68%', '中', '進行中', '田中T.L.', '2024/03/31', 'スコープ要確認'],
+    ['PJ-002', 'レガシー刷新', 'PoC', '8.0人月', '42%', '高', 'リスケ中', '鈴木PM', '2024/06/30', '外部ベンダー調整中'],
+    ['PJ-003', 'データ基盤構築', '設計', '5.0人月', '91%', '低', '順調', '高橋アーキ', '2024/02/28', 'AWS移行完了'],
+    ['PJ-004', 'AI活用検討', 'FS', '1.5人月', '33%', '高', '停滞', '山田Dir', '2024/04/15', 'POC結果待ち'],
+    ['PJ-005', 'セキュリティ強化', '実装', '4.0人月', '77%', '中', '進行中', '佐藤SE', '2024/03/15', 'ペネトレスト予定'],
+    ['PJ-006', 'UX改善', 'テスト', '2.0人月', '55%', '中', 'レビュー中', '伊藤デザイン', '2024/02/20', 'ユーザビリティ調査中'],
+  ];
+
+  let html = '<table><thead><tr>';
+  headers.forEach(h => { html += `<th>${h}</th>`; });
+  html += '</tr></thead><tbody>';
+  rows.forEach(row => {
+    html += '<tr>';
+    row.forEach(cell => { html += `<td>${cell}</td>`; });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ============================================================
+//  TOAST NOTIFICATION
+// ============================================================
+function showToast(message) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(() => { toast.classList.add('show'); }, 10);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => { container.removeChild(toast); }, 400);
+  }, 3500);
+}
+
+// ============================================================
+//  UTILITY
+// ============================================================
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
